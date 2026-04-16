@@ -81,6 +81,20 @@ button {
     transition: transform 0.3s;
 }
 
+.course-card{
+    padding:20px;
+    width:220px;
+    height:100px;
+    background:#fff;
+    border-radius:10px;
+    text-align:center;
+    box-shadow:0 4px 10px rgba(0,0,0,0.1);
+}
+
+.powershell{
+    background:#0078D4;
+    color:white;
+}
 .card:hover {
     transform: translateY(-5px);
 }
