@@ -35,8 +35,8 @@ jobs:
         run: |
           echo "Checking website files..."
           test -f index.html
-          test -f style.css
-          test -f script.js
+          test -f css/style.css
+          test -f js/script.js
           echo "All files found."
 
       # Create deployment package
