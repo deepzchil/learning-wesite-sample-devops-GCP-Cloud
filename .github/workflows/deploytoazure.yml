@@ -110,36 +110,119 @@ jobs:
           from: ${{ secrets.MAIL_USERNAME }}
 
           html_body: |
-            <h2>Dear ${{ env.MANAGER_NAME }},</h2>
+            <html>
+            <body style="font-family:Arial, Helvetica, sans-serif; color:#333333; line-height:1.6;">
 
-            <p>The latest production build has completed successfully and is awaiting approval.</p>
-
-            <h3>Deployment Summary</h3>
-            <table border="1" cellpadding="8" cellspacing="0">
-              <tr><td><b>Repository</b></td><td>${{ github.repository }}</td></tr>
-              <tr><td><b>Branch</b></td><td>${{ github.ref_name }}</td></tr>
-              <tr><td><b>Triggered By</b></td><td>${{ github.actor }}</td></tr>
-              <tr><td><b>Build Status</b></td><td>SUCCESS</td></tr>
-              <tr><td><b>Commit ID</b></td><td>${{ github.sha }}</td></tr>
-              <tr><td><b>Commit Message</b></td><td>${{ needs.build.outputs.commit_message }}</td></tr>
-            </table>
-
-            <h3>Exact Code Changes</h3>
-            <pre>${{ needs.build.outputs.changed_files }}</pre>
-
-            <h3>Action Required</h3>
-            <p>Please approve deployment from GitHub:</p>
+            <h2 style="color:#0b5ed7;">Dear ${{ env.MANAGER_NAME }},</h2>
 
             <p>
-            Repository → Actions → Latest Run → Review Deployments → Approve
+              This is to inform you that the latest build for the project 
+              <b>${{ github.repository }}</b> has been completed successfully and is now ready 
+              for Production Deployment approval.
             </p>
 
-            <h3>Production URL</h3>
-            <p>https://indradeep.azurewebsites.net</p>
+            <p>
+              As part of our controlled release process, your review and approval are required 
+              before deployment can proceed to the production environment.
+            </p>
+
+            <hr>
+
+            <h3 style="color:#0b5ed7;">Deployment Summary</h3>
+
+            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%;">
+              <tr>
+                <td><b>Repository Name</b></td>
+                <td>${{ github.repository }}</td>
+              </tr>
+              <tr>
+                <td><b>Branch</b></td>
+                <td>${{ github.ref_name }}</td>
+              </tr>
+              <tr>
+                <td><b>Build Status</b></td>
+                <td style="color:green;"><b>SUCCESS</b></td>
+              </tr>
+              <tr>
+                <td><b>Triggered By</b></td>
+                <td>${{ github.actor }}</td>
+              </tr>
+              <tr>
+                <td><b>Commit ID</b></td>
+                <td>${{ github.sha }}</td>
+              </tr>
+              <tr>
+                <td><b>Commit Message</b></td>
+                <td>${{ needs.build.outputs.commit_message }}</td>
+              </tr>
+              <tr>
+                <td><b>Deployment Environment</b></td>
+                <td>Production</td>
+              </tr>
+            </table>
 
             <br>
-            Regards,<br>
-            DevOps CI/CD Automation
+
+            <h3 style="color:#0b5ed7;">Code Changes Included in this Release</h3>
+
+            <p>
+              Please review the exact files modified as part of this deployment package:
+            </p>
+
+            <pre style="
+              background:#f4f4f4;
+              padding:12px;
+              border:1px solid #dddddd;
+              border-radius:5px;
+              font-size:14px;">${{ needs.build.outputs.changed_files }}</pre>
+
+            <h3 style="color:#0b5ed7;">Impact Assessment</h3>
+
+            <ul>
+              <li>Latest approved source code from <b>${{ github.ref_name }}</b> branch is packaged.</li>
+              <li>Mandatory website files validated successfully.</li>
+              <li>Deployment artifact created and stored securely.</li>
+              <li>No production changes will occur until approval is granted.</li>
+            </ul>
+
+            <h3 style="color:#0b5ed7;">Approval Required</h3>
+
+            <p>
+              Kindly review the above changes and approve the production deployment by following:
+            </p>
+
+            <ol>
+              <li>Open GitHub Repository</li>
+              <li>Navigate to <b>Actions</b></li>
+              <li>Select the latest workflow run</li>
+              <li>Click <b>Review Deployments</b></li>
+              <li>Select <b>Approve and Deploy</b></li>
+            </ol>
+
+            <h3 style="color:#0b5ed7;">Production URL</h3>
+
+            <p>
+              <a href="https://indradeep.azurewebsites.net">
+                https://indradeep.azurewebsites.net
+              </a>
+            </p>
+
+            <hr>
+
+            <p>
+              Please let us know if any further clarification is required before approval.
+            </p>
+
+            <br>
+
+            <p>
+              Regards,<br>
+              <b>DevOps Automation Team</b><br>
+              CI/CD Release Pipeline
+            </p>
+
+            </body>
+            </html>
 
 # =================================================
 # JOB 3 - MANUAL APPROVAL
