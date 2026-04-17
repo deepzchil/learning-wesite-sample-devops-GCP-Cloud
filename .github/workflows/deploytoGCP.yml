@@ -172,6 +172,9 @@ jobs:
         run: |
           gsutil -m rsync -r ./artifact gs://${{ env.GCP_BUCKET_NAME }}
 
+      - name: Make Bucket Public (Fix AccessDenied)
+        run: gsutil iam ch allUsers:objectViewer gs://${{ env.GCP_BUCKET_NAME }}
+
       #- name: Make Files Public
         #run: |
           #gsutil iam ch allUsers:objectViewer gs://${{ env.GCP_BUCKET_NAME }}
