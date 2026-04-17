@@ -168,13 +168,13 @@ jobs:
       - name: Set GCP Project
         run: gcloud config set project ${{ env.GCP_PROJECT_ID }}
 
-      - name: Upload Website to GCP Bucket
+      - name: Upload Website to GCP Bucket (No Public IAM Change)
         run: |
           gsutil -m rsync -r ./artifact gs://${{ env.GCP_BUCKET_NAME }}
 
-      - name: Make Files Public
-        run: |
-          gsutil iam ch allUsers:objectViewer gs://${{ env.GCP_BUCKET_NAME }}
+      #- name: Make Files Public
+        #run: |
+          #gsutil iam ch allUsers:objectViewer gs://${{ env.GCP_BUCKET_NAME }}
 
 # =================================================
 # JOB 5 - SUCCESS EMAIL
