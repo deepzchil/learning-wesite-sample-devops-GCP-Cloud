@@ -1,10 +1,10 @@
-name: Enterprise CI/CD Static Website to GCP 
+name: Enterprise CI/CD Static Website to GCP
 
 on:
   push:
     branches:
       - main
-  #workflow_dispatch:
+  # workflow_dispatch:
 
 # -------------------------------------------------
 # GLOBAL VARIABLES
@@ -34,6 +34,7 @@ jobs:
   build:
     name: Build Website Package
     runs-on: ubuntu-latest
+
     outputs:
       commit_message: ${{ steps.commit.outputs.msg }}
       changed_files: ${{ steps.changes.outputs.files }}
@@ -93,24 +94,18 @@ jobs:
           secure: false
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-
           subject: GCP Production Deployment Approval Required
-
           to: ${{ env.MANAGER_EMAIL }}
           from: ${{ secrets.MAIL_USERNAME }}
 
           html_body: |
             <h2>Dear ${{ env.MANAGER_NAME }},</h2>
-
-            <p>
-            Build completed successfully for repository:
-            <b>${{ github.repository }}</b>
-            </p>
+            <p>Build completed successfully for repository:
+            <b>${{ github.repository }}</b></p>
 
             <p>Approval required before Production deployment to Google Cloud.</p>
 
             <h3>Summary</h3>
-
             <ul>
               <li>Branch: ${{ github.ref_name }}</li>
               <li>Commit ID: ${{ github.sha }}</li>
@@ -118,7 +113,6 @@ jobs:
             </ul>
 
             <h3>Files Changed</h3>
-
             <pre>${{ needs.build.outputs.changed_files }}</pre>
 
             <p>Please approve deployment in GitHub Actions.</p>
@@ -136,7 +130,8 @@ jobs:
       url: https://storage.googleapis.com/${{ env.GCP_BUCKET_NAME }}/index.html
 
     steps:
-      - run: echo "Waiting for manager approval..."
+      - name: Waiting Approval
+        run: echo "Waiting for manager approval..."
 
 # =================================================
 # JOB 4 - DEPLOY TO GCP CLOUD STORAGE
@@ -162,13 +157,16 @@ jobs:
           unzip -o release.zip
 
       - name: Authenticate to GCP
-  uses: google-github-actions/auth@v2
-  with:
-    workload_identity_provider: projects/987654321/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-    service_account: github-actions@project-78555375-da98-4979-92f.iam.gserviceaccount.com
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/987654321/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions@project-78555375-da98-4979-92f.iam.gserviceaccount.com
 
       - name: Setup Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set GCP Project
+        run: gcloud config set project ${{ env.GCP_PROJECT_ID }}
 
       - name: Upload Website to GCP Bucket
         run: |
@@ -195,18 +193,14 @@ jobs:
           secure: false
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-
           subject: GCP Production Deployment Successful
-
           to: ${{ env.MANAGER_EMAIL }}
           from: ${{ secrets.MAIL_USERNAME }}
 
           html_body: |
             <h2>Dear ${{ env.MANAGER_NAME }},</h2>
 
-            <p>
-            Production deployment completed successfully.
-            </p>
+            <p>Production deployment completed successfully.</p>
 
             <ul>
               <li>Repository: ${{ github.repository }}</li>
@@ -216,7 +210,6 @@ jobs:
             </ul>
 
             <h3>Production URL</h3>
-
             <p>
             https://storage.googleapis.com/${{ env.GCP_BUCKET_NAME }}/index.html
             </p>
