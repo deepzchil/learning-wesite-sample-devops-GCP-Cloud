@@ -38,13 +38,13 @@ jobs:
           CMD ["nginx", "-g", "daemon off;"]
           EOF
 
-      - run: docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} .
+      - run: docker build -t us-docker.pkg.dev/${{ env.PROJECT_ID }}/myrepo/${{ env.SERVICE_NAME }} .
 
-      - run: docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+      - run: docker push us-docker.pkg.dev/${{ env.PROJECT_ID }}/myrepo/${{ env.SERVICE_NAME }}
 
       - run: |
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-          --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} \
+          --image us-docker.pkg.dev/${{ env.PROJECT_ID }}/myrepo/${{ env.SERVICE_NAME }} \
           --platform managed \
           --region ${{ env.REGION }} \
           --allow-unauthenticated
