@@ -248,7 +248,7 @@ jobs:
 
       - name: Upload Files to Bucket
         run: |
-          gsutil -m cp -r index.html css js gs://${{ env.BUCKET_NAME }}
+          gcloud storage cp --recursive index.html css js gs://githubactions-prod-bucket
 
       - name: Make Website Public
         run: |
