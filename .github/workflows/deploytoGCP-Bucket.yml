@@ -1,0 +1,422 @@
+name: CI/CD Static Website to GCP Storage Bucket (Approval Flow)
+
+on:
+  push:
+    branches:
+      - main
+
+# -------------------------------------------------
+# GLOBAL VARIABLES
+# -------------------------------------------------
+env:
+  PROJECT_ID: githubaction-deploy-staticcode
+  BUCKET_NAME: githubactions-prod-bucket
+  REGION: us-central1
+  NODE_VERSION: '24'
+  PACKAGE_NAME: release.zip
+  MANAGER_EMAIL: ${{ vars.MANAGER_EMAIL }}
+  MANAGER_NAME: ${{ vars.MANAGER_NAME }}
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+
+# -------------------------------------------------
+# JOB 1 - BUILD WEBSITE
+# -------------------------------------------------
+  build:
+    name: Build Website Package
+    runs-on: ubuntu-latest
+
+    outputs:
+      changed_files: ${{ steps.diff.outputs.changed_files }}
+      commit_message: ${{ steps.commit.outputs.commit_message }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Read Commit Message
+        id: commit
+        run: echo "commit_message=$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
+
+      - name: Detect Changed Files
+        id: diff
+        run: |
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          git diff --name-only HEAD~1 HEAD >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Validate Required Files
+        run: |
+          test -f index.html
+          test -f css/style.css
+          test -f js/script.js
+
+      - name: Zip Build Package
+        run: zip -r ${{ env.PACKAGE_NAME }} index.html css js
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-build
+          path: .
+
+# -------------------------------------------------
+# JOB 2 - EMAIL APPROVAL REQUEST
+# -------------------------------------------------
+  approval-mail:
+    name: Send Approval Email
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: Production Deployment Approval Required - GCP Bucket | ${{ github.repository }}
+          to: ${{ env.MANAGER_EMAIL }}
+          from: ${{ secrets.MAIL_USERNAME }}
+          
+          html_body: |
+            <html>
+            <body style="font-family:Arial, Helvetica, sans-serif; color:#333333; line-height:1.6;">
+
+            <h2 style="color:#0b5ed7;">Dear ${{ env.MANAGER_NAME }},</h2>
+
+            <p>
+              This is to inform you that the latest build for the project 
+              <b>${{ github.repository }}</b> has been completed successfully and is now ready 
+              for Production Deployment approval.
+            </p>
+
+            <p>
+              As part of our controlled release process, your review and approval are required 
+              before deployment can proceed to the production environment.
+            </p>
+
+            <hr>
+
+            <h3 style="color:#0b5ed7;">Deployment Summary</h3>
+
+            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%;">
+              <tr>
+                <td><b>Repository Name</b></td>
+                <td>${{ github.repository }}</td>
+              </tr>
+              <tr>
+                <td><b>Branch</b></td>
+                <td>${{ github.ref_name }}</td>
+              </tr>
+              <tr>
+                <td><b>Build Status</b></td>
+                <td style="color:green;"><b>SUCCESS</b></td>
+              </tr>
+              <tr>
+                <td><b>Triggered By</b></td>
+                <td>${{ github.actor }}</td>
+              </tr>
+              <tr>
+                <td><b>Commit ID</b></td>
+                <td>${{ github.sha }}</td>
+              </tr>
+              <tr>
+                <td><b>Commit Message</b></td>
+                <td>${{ needs.build.outputs.commit_message }}</td>
+              </tr>
+              <tr>
+                <td><b>Deployment Environment</b></td>
+                <td>Production</td>
+              </tr>
+            </table>
+
+            <br>
+
+            <h3 style="color:#0b5ed7;">Code Changes Included in this Release</h3>
+
+            <p>
+              Please review the exact files modified as part of this deployment package:
+            </p>
+
+            <pre style="
+              background:#f4f4f4;
+              padding:12px;
+              border:1px solid #dddddd;
+              border-radius:5px;
+              font-size:14px;">${{ needs.build.outputs.changed_files }}</pre>
+
+            <h3 style="color:#0b5ed7;">Impact Assessment</h3>
+
+            <ul>
+              <li>Latest approved source code from <b>${{ github.ref_name }}</b> branch is packaged.</li>
+              <li>Mandatory website files validated successfully.</li>
+              <li>Deployment artifact created and stored securely.</li>
+              <li>No production changes will occur until approval is granted.</li>
+            </ul>
+
+            <h3 style="color:#0b5ed7;">Approval Required</h3>
+
+            <p>
+              Kindly review the above changes and approve the production deployment by following:
+            </p>
+
+            <ol>
+              <li>Open GitHub Repository</li>
+              <li>Navigate to <b>Actions</b></li>
+              <li>Select the latest workflow run</li>
+              <li>Click <b>Review Deployments</b></li>
+              <li>Select <b>Approve and Deploy</b></li>
+            </ol>
+
+            <h3 style="color:#0b5ed7;">Production URL</h3>
+
+            <p>
+              <a href="https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html">
+                https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html
+              </a>
+            </p>
+
+            <hr>
+
+            <p>
+              Please let us know if any further clarification is required before approval.
+            </p>
+
+            <br>
+
+            <p>
+              Regards,<br>
+              <b>DevOps Automation Team</b><br>
+              CI/CD Release Pipeline
+            </p>
+
+            </body>
+            </html>
+
+# -------------------------------------------------
+# JOB 3 - MANUAL APPROVAL
+# -------------------------------------------------
+  approval:
+    name: Production Approval
+    needs: approval-mail
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+      url: https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html
+
+    steps:
+      - run: echo "Waiting for manager approval"
+
+# -------------------------------------------------
+# JOB 4 - DEPLOY TO GCS BUCKET
+# -------------------------------------------------
+  deploy:
+    name: Deploy to GCS Bucket
+    needs: approval
+    runs-on: ubuntu-latest
+
+    environment:
+      name: production
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v5
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/759899501179/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions@githubaction-deploy-staticcode.iam.gserviceaccount.com
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Upload Files to Bucket
+        run: |
+          gsutil -m cp -r index.html css js gs://${{ env.BUCKET_NAME }}
+
+      - name: Make Website Public
+        run: |
+          gsutil iam ch allUsers:objectViewer gs://${{ env.BUCKET_NAME }}
+
+      - name: Enable Website Hosting
+        run: |
+          gsutil web set -m index.html -e index.html gs://${{ env.BUCKET_NAME }}
+
+# -------------------------------------------------
+# JOB 5 - SUCCESS EMAIL AFTER DEPLOYMENT
+# -------------------------------------------------
+  success-mail:
+    name: Send Success Email
+    needs: [deploy, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Success Mail
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+
+          subject: Production Deployment Successful | ${{ github.repository }}
+
+          to: ${{ env.MANAGER_EMAIL }}
+          from: ${{ secrets.MAIL_USERNAME }}
+
+          html_body: |
+            <html>
+            <body style="font-family:Arial, Helvetica, sans-serif; color:#333333; line-height:1.6; margin:0; padding:0;">
+
+              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8; padding:30px;">
+                <tr>
+                  <td align="center">
+
+                    <table width="800" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; padding:30px; box-shadow:0 0 10px rgba(0,0,0,0.08);">
+
+                      <tr>
+                        <td>
+
+                          <h2 style="color:#198754; margin-top:0;">
+                            Production Deployment Completed Successfully
+                          </h2>
+
+                          <p>Dear <b>${{ env.MANAGER_NAME }}</b>,</p>
+
+                          <p>
+                            We are pleased to inform you that the approved production deployment for
+                            <b>${{ github.repository }}</b> has been executed successfully through the automated CI/CD release pipeline.
+                          </p>
+
+                          <p>
+                            The latest validated application build is now live in the Production environment and available for end users.
+                          </p>
+
+                          <hr style="border:0; border-top:1px solid #dddddd;">
+
+                          <h3 style="color:#198754;">Deployment Overview</h3>
+
+                          <table width="100%" border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; font-size:14px;">
+                            <tr>
+                              <td><b>Application Name</b></td>
+                              <td>${{ github.repository }}</td>
+                            </tr>
+                            <tr>
+                              <td><b>Branch Released</b></td>
+                              <td>${{ github.ref_name }}</td>
+                            </tr>
+                            <tr>
+                              <td><b>Environment</b></td>
+                              <td>Production</td>
+                            </tr>
+                            <tr>
+                              <td><b>Deployment Status</b></td>
+                              <td style="color:green;"><b>SUCCESSFUL</b></td>
+                            </tr>
+                            <tr>
+                              <td><b>Approved By</b></td>
+                              <td>${{ env.MANAGER_NAME }}</td>
+                            </tr>
+                            <tr>
+                              <td><b>Executed By</b></td>
+                              <td>${{ github.actor }}</td>
+                            </tr>
+                            <tr>
+                              <td><b>Commit ID</b></td>
+                              <td>${{ github.sha }}</td>
+                            </tr>
+                            <tr>
+                              <td><b>Commit Description</b></td>
+                              <td>${{ needs.build.outputs.commit_message }}</td>
+                            </tr>
+                          </table>
+
+                          <br>
+
+                          <h3 style="color:#198754;">Changes Released to Production</h3>
+
+                          <p>
+                            Below are the exact source files modified in this deployment:
+                          </p>
+
+                          <pre style="background:#f8f9fa; padding:14px; border:1px solid #dddddd; border-radius:6px; font-size:13px; overflow:auto;">${{ needs.build.outputs.changed_files }}</pre>
+
+                          <h3 style="color:#198754;">Release Validation Summary</h3>
+
+                          <ul>
+                            <li>Build package generated successfully.</li>
+                            <li>Artifact integrity verified before deployment.</li>
+                            <li>Google Cloud Run Web App updated with latest release package.</li>
+                            <li>Deployment completed without pipeline errors.</li>
+                            <li>Production instance is operational and accessible.</li>
+                          </ul>
+
+                          <h3 style="color:#198754;">Business Impact</h3>
+
+                          <p>
+                            All approved enhancements, fixes, and UI/code changes from this release are now active in Production.
+                            This deployment was completed through the standardized release governance process.
+                          </p>
+
+                          <h3 style="color:#198754;">Production URL</h3>
+
+                          <p>
+                            <a href="https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html" style="color:#0d6efd;">
+                              https://storage.googleapis.com/${{ env.BUCKET_NAME }}/index.html
+                            </a>
+                          </p>
+
+                          <h3 style="color:#198754;">Recommended Next Steps</h3>
+
+                          <ol>
+                            <li>Perform quick functional validation on Production.</li>
+                            <li>Confirm business-critical pages are accessible.</li>
+                            <li>Share approval for closure if no issues are identified.</li>
+                          </ol>
+
+                          <hr style="border:0; border-top:1px solid #dddddd;">
+
+                          <p>
+                            Thank you for your approval and continued support of the controlled deployment process.
+                          </p>
+
+                          <p>
+                            Should any immediate rollback, hotfix, or production support be required, the DevOps team is available to assist.
+                          </p>
+
+                          <br>
+
+                          <p>
+                            Regards,<br>
+                            <b>DevOps Automation Team</b><br>
+                            Enterprise CI/CD Release Management Team
+                          </p>
+
+                        </td>
+                      </tr>
+
+                    </table>
+
+                  </td>
+                </tr>
+              </table>
+
+            </body>
+            </html>
