@@ -1,4 +1,4 @@
-name: Enterprise CI/CD Static Website to GCP (Approval Flow)
+name: CI/CD Static Website to GCP (Approval Flow)
 
 on:
   push:
@@ -21,30 +21,38 @@ permissions:
 jobs:
 
 # -------------------------------------------------
-# JOB 1 - BUILD + VALIDATION + CHANGE SUMMARY
+# JOB 1 - BUILD
 # -------------------------------------------------
   build:
     runs-on: ubuntu-latest
 
     outputs:
-      changes: ${{ steps.diff.outputs.changes }}
+      changed_files: ${{ steps.diff.outputs.changed_files }}
+      commit_message: ${{ steps.commit.outputs.commit_message }}
 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 2
+
+      - name: Read Commit Message
+        id: commit
+        run: |
+          echo "commit_message=$(git log -1 --pretty=%B)" >> $GITHUB_OUTPUT
+
+      - name: Detect Changed Files
+        id: diff
+        run: |
+          echo "changed_files<<EOF" >> $GITHUB_OUTPUT
+          git diff --name-only HEAD~1 HEAD >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Validate Required Files
         run: |
-          test -f index.html || (echo "Missing index.html" && exit 1)
-          test -f css/style.css || (echo "Missing css/style.css" && exit 1)
-          test -f js/script.js || (echo "Missing js/script.js" && exit 1)
-
-      - name: Show Changed Files
-        id: diff
-        run: |
-          echo "changes<<EOF" >> $GITHUB_OUTPUT
-          git diff --name-only HEAD~1 HEAD >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          test -f index.html
+          test -f css/style.css
+          test -f js/script.js
 
       - name: Zip Build Package
         run: zip -r ${{ env.PACKAGE_NAME }} index.html css js
@@ -55,16 +63,15 @@ jobs:
           name: website-build
           path: ${{ env.PACKAGE_NAME }}
 
-# =================================================
-# JOB 2 - EMAIL APPROVAL REQUEST WITH CHANGES
-# =================================================
+# -------------------------------------------------
+# JOB 2 - EMAIL APPROVAL REQUEST
+# -------------------------------------------------
   approval-mail:
-    name: Send Approval Email
     needs: build
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send Email
+      - name: Send Approval Email
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -72,86 +79,34 @@ jobs:
           secure: false
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-
-          subject: Production Deployment Approval Required | ${{ github.repository }}
-
+          subject: Production Deployment Approval Required
           to: ${{ env.MANAGER_EMAIL }}
           from: ${{ secrets.MAIL_USERNAME }}
-
           html_body: |
-            <html>
-            <body style="font-family:Arial, Helvetica, sans-serif; color:#333333; line-height:1.6;">
+            <h2>Dear ${{ env.MANAGER_NAME }}</h2>
+            <p>Build completed successfully and approval is required.</p>
+            <p><b>Commit:</b> ${{ needs.build.outputs.commit_message }}</p>
+            <pre>${{ needs.build.outputs.changed_files }}</pre>
 
-            <h2 style="color:#0b5ed7;">Dear ${{ env.MANAGER_NAME }},</h2>
-
-            <p>
-              Latest build for <b>${{ github.repository }}</b> completed successfully
-              and is ready for <b>Production Approval</b>.
-            </p>
-
-            <h3 style="color:#0b5ed7;">Deployment Summary</h3>
-
-            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%;">
-              <tr><td><b>Repository</b></td><td>${{ github.repository }}</td></tr>
-              <tr><td><b>Branch</b></td><td>${{ github.ref_name }}</td></tr>
-              <tr><td><b>Status</b></td><td style="color:green;"><b>SUCCESS</b></td></tr>
-              <tr><td><b>Triggered By</b></td><td>${{ github.actor }}</td></tr>
-              <tr><td><b>Commit ID</b></td><td>${{ github.sha }}</td></tr>
-              <tr><td><b>Commit Message</b></td><td>${{ needs.build.outputs.commit_message }}</td></tr>
-              <tr><td><b>Environment</b></td><td>Production</td></tr>
-            </table>
-
-            <br>
-
-            <h3 style="color:#0b5ed7;">Files Changed</h3>
-
-            <pre style="background:#f4f4f4;padding:12px;border:1px solid #ddd;border-radius:5px;">${{ needs.build.outputs.changed_files }}</pre>
-
-            <h3 style="color:#0b5ed7;">Approval Steps</h3>
-
-            <ol>
-              <li>Open GitHub Repository</li>
-              <li>Go to Actions</li>
-              <li>Select latest workflow</li>
-              <li>Click Review Deployments</li>
-              <li>Approve and Deploy</li>
-            </ol>
-
-            <p>
-              <b>Production URL:</b><br>
-              https://mywebsite-759899501179.us-central1.run.app/
-            </p>
-
-            <br>
-
-            <p>
-              Regards,<br>
-              <b>DevOps Automation Team</b>
-            </p>
-
-            </body>
-            </html>
-
-# =================================================
+# -------------------------------------------------
 # JOB 3 - MANUAL APPROVAL
-# =================================================
+# -------------------------------------------------
   approval:
-    name: Production Approval
     needs: approval-mail
     runs-on: ubuntu-latest
 
     environment:
       name: production
-      url: https://YOUR_GCP_CLOUD_RUN_URL
+      url: https://mywebsite-759899501179.us-central1.run.app/
 
     steps:
-      - run: echo "Waiting for manager approval..."
+      - run: echo "Waiting for approval"
 
 # -------------------------------------------------
 # JOB 4 - DEPLOY TO GCP CLOUD RUN
 # -------------------------------------------------
   deploy:
-    needs: manual-approval
+    needs: approval
     runs-on: ubuntu-latest
 
     steps:
@@ -194,11 +149,10 @@ jobs:
           --platform managed \
           --allow-unauthenticated
 
-# =================================================
-# JOB 5 - POST DEPLOYMENT EMAIL
-# =================================================
+# -------------------------------------------------
+# JOB 5 - SUCCESS EMAIL
+# -------------------------------------------------
   success-mail:
-    name: Send Success Email
     needs: [deploy, build]
     runs-on: ubuntu-latest
 
@@ -211,54 +165,11 @@ jobs:
           secure: false
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-
-          subject: Production Deployment Successful | ${{ github.repository }}
-
+          subject: Production Deployment Successful
           to: ${{ env.MANAGER_EMAIL }}
           from: ${{ secrets.MAIL_USERNAME }}
-
           html_body: |
-            <html>
-            <body style="font-family:Arial, Helvetica, sans-serif; color:#333333; line-height:1.6;">
-
-            <h2 style="color:#198754;">Production Deployment Successful</h2>
-
-            <p>Dear <b>${{ env.MANAGER_NAME }}</b>,</p>
-
-            <p>
-            Approved production deployment for
-            <b>${{ github.repository }}</b> completed successfully.
-            </p>
-
-            <h3 style="color:#198754;">Deployment Summary</h3>
-
-            <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; width:100%;">
-              <tr><td><b>Repository</b></td><td>${{ github.repository }}</td></tr>
-              <tr><td><b>Branch</b></td><td>${{ github.ref_name }}</td></tr>
-              <tr><td><b>Status</b></td><td style="color:green;"><b>SUCCESSFUL</b></td></tr>
-              <tr><td><b>Approved By</b></td><td>${{ env.MANAGER_NAME }}</td></tr>
-              <tr><td><b>Executed By</b></td><td>${{ github.actor }}</td></tr>
-              <tr><td><b>Commit ID</b></td><td>${{ github.sha }}</td></tr>
-              <tr><td><b>Commit Message</b></td><td>${{ needs.build.outputs.commit_message }}</td></tr>
-            </table>
-
-            <br>
-
-            <h3 style="color:#198754;">Released Changes</h3>
-
-            <pre style="background:#f8f9fa;padding:14px;border:1px solid #ddd;border-radius:6px;">${{ needs.build.outputs.changed_files }}</pre>
-
-            <p>
-              <b>Production URL:</b><br>
-              https://mywebsite-759899501179.us-central1.run.app/
-            </p>
-
-            <br>
-
-            <p>
-              Regards,<br>
-              <b>DevOps Automation Team</b>
-            </p>
-
-            </body>
-            </html>
+            <h2>Deployment Successful</h2>
+            <p>Dear ${{ env.MANAGER_NAME }}</p>
+            <p>Production deployment completed successfully.</p>
+            <p><b>URL:</b> https://mywebsite-759899501179.us-central1.run.app/</p>
