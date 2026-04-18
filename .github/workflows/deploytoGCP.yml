@@ -67,26 +67,156 @@ jobs:
 # JOB 2 - EMAIL APPROVAL REQUEST
 # -------------------------------------------------
   approval-mail:
-    needs: build
-    runs-on: ubuntu-latest
+  name: Send Approval Email
+  needs: build
+  runs-on: ubuntu-latest
 
-    steps:
-      - name: Send Approval Email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          secure: false
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: Production Deployment Approval Required
-          to: ${{ env.MANAGER_EMAIL }}
-          from: ${{ secrets.MAIL_USERNAME }}
-          html_body: |
-            <h2>Dear ${{ env.MANAGER_NAME }}</h2>
-            <p>Build completed successfully and approval is required.</p>
-            <p><b>Commit:</b> ${{ needs.build.outputs.commit_message }}</p>
-            <pre>${{ needs.build.outputs.changed_files }}</pre>
+  steps:
+    - name: Send Email
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 587
+        secure: false
+        username: ${{ secrets.MAIL_USERNAME }}
+        password: ${{ secrets.MAIL_PASSWORD }}
+
+        subject: Production Deployment Approval Required | ${{ github.repository }}
+
+        to: ${{ env.MANAGER_EMAIL }}
+        from: ${{ secrets.MAIL_USERNAME }}
+
+        html_body: |
+          <html>
+          <body style="font-family:Arial, Helvetica, sans-serif; color:#333333; line-height:1.6; margin:0; padding:0;">
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8; padding:30px;">
+              <tr>
+                <td align="center">
+
+                  <table width="800" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; padding:30px; box-shadow:0 0 10px rgba(0,0,0,0.08);">
+
+                    <tr>
+                      <td>
+
+                        <h2 style="color:#0b5ed7; margin-top:0;">
+                          Production Deployment Approval Required
+                        </h2>
+
+                        <p>Dear <b>${{ env.MANAGER_NAME }}</b>,</p>
+
+                        <p>
+                          We would like to inform you that the latest build for
+                          <b>${{ github.repository }}</b> has completed successfully
+                          and is now ready for Production deployment approval.
+                        </p>
+
+                        <p>
+                          As part of our controlled release governance process,
+                          deployment to Production requires your review and approval.
+                        </p>
+
+                        <hr style="border:0; border-top:1px solid #dddddd;">
+
+                        <h3 style="color:#0b5ed7;">Deployment Summary</h3>
+
+                        <table width="100%" border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; font-size:14px;">
+                          <tr>
+                            <td><b>Repository Name</b></td>
+                            <td>${{ github.repository }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Branch</b></td>
+                            <td>${{ github.ref_name }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Build Status</b></td>
+                            <td style="color:green;"><b>SUCCESS</b></td>
+                          </tr>
+                          <tr>
+                            <td><b>Triggered By</b></td>
+                            <td>${{ github.actor }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Commit ID</b></td>
+                            <td>${{ github.sha }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Commit Message</b></td>
+                            <td>${{ needs.build.outputs.commit_message }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Deployment Environment</b></td>
+                            <td>Production</td>
+                          </tr>
+                        </table>
+
+                        <br>
+
+                        <h3 style="color:#0b5ed7;">Code Changes Included in this Release</h3>
+
+                        <p>
+                          Please review the exact files modified as part of this deployment package:
+                        </p>
+
+                        <pre style="background:#f8f9fa; padding:14px; border:1px solid #dddddd; border-radius:6px; font-size:13px; overflow:auto;">${{ needs.build.outputs.changed_files }}</pre>
+
+                        <h3 style="color:#0b5ed7;">Impact Assessment</h3>
+
+                        <ul>
+                          <li>Latest approved source code packaged successfully.</li>
+                          <li>Mandatory website files validated successfully.</li>
+                          <li>Deployment artifact created and stored securely.</li>
+                          <li>No Production changes will occur until approval is granted.</li>
+                        </ul>
+
+                        <h3 style="color:#0b5ed7;">Approval Required</h3>
+
+                        <p>
+                          Kindly review the above details and approve deployment using:
+                        </p>
+
+                        <ol>
+                          <li>Open GitHub Repository</li>
+                          <li>Navigate to <b>Actions</b></li>
+                          <li>Select latest workflow run</li>
+                          <li>Click <b>Review Deployments</b></li>
+                          <li>Select <b>Approve and Deploy</b></li>
+                        </ol>
+
+                        <h3 style="color:#0b5ed7;">Production URL</h3>
+
+                        <p>
+                          <a href="https://YOUR_GCP_CLOUD_RUN_URL" style="color:#0d6efd;">
+                            https://YOUR_GCP_CLOUD_RUN_URL
+                          </a>
+                        </p>
+
+                        <hr style="border:0; border-top:1px solid #dddddd;">
+
+                        <p>
+                          Please let us know if any clarification is required before approval.
+                        </p>
+
+                        <br>
+
+                        <p>
+                          Regards,<br>
+                          <b>DevOps Automation Team</b><br>
+                          Enterprise CI/CD Release Management
+                        </p>
+
+                      </td>
+                    </tr>
+
+                  </table>
+
+                </td>
+              </tr>
+            </table>
+
+          </body>
+          </html>
 
 # -------------------------------------------------
 # JOB 3 - MANUAL APPROVAL
@@ -153,23 +283,162 @@ jobs:
 # JOB 5 - SUCCESS EMAIL
 # -------------------------------------------------
   success-mail:
-    needs: [deploy, build]
-    runs-on: ubuntu-latest
+  name: Send Success Email
+  needs: [deploy, build]
+  runs-on: ubuntu-latest
 
-    steps:
-      - name: Send Success Mail
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          secure: false
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: Production Deployment Successful
-          to: ${{ env.MANAGER_EMAIL }}
-          from: ${{ secrets.MAIL_USERNAME }}
-          html_body: |
-            <h2>Deployment Successful</h2>
-            <p>Dear ${{ env.MANAGER_NAME }}</p>
-            <p>Production deployment completed successfully.</p>
-            <p><b>URL:</b> https://mywebsite-759899501179.us-central1.run.app/</p>
+  steps:
+    - name: Send Success Mail
+      uses: dawidd6/action-send-mail@v3
+      with:
+        server_address: smtp.gmail.com
+        server_port: 587
+        secure: false
+        username: ${{ secrets.MAIL_USERNAME }}
+        password: ${{ secrets.MAIL_PASSWORD }}
+
+        subject: Production Deployment Successful | ${{ github.repository }}
+
+        to: ${{ env.MANAGER_EMAIL }}
+        from: ${{ secrets.MAIL_USERNAME }}
+
+        html_body: |
+          <html>
+          <body style="font-family:Arial, Helvetica, sans-serif; color:#333333; line-height:1.6; margin:0; padding:0;">
+
+            <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f8; padding:30px;">
+              <tr>
+                <td align="center">
+
+                  <table width="800" cellpadding="0" cellspacing="0" style="background:#ffffff; border-radius:8px; padding:30px; box-shadow:0 0 10px rgba(0,0,0,0.08);">
+
+                    <tr>
+                      <td>
+
+                        <h2 style="color:#198754; margin-top:0;">
+                          Production Deployment Completed Successfully
+                        </h2>
+
+                        <p>Dear <b>${{ env.MANAGER_NAME }}</b>,</p>
+
+                        <p>
+                          We are pleased to inform you that the approved production deployment for
+                          <b>${{ github.repository }}</b> has been executed successfully through the automated CI/CD release pipeline.
+                        </p>
+
+                        <p>
+                          The latest validated application build is now live in the Production environment and available for end users.
+                        </p>
+
+                        <hr style="border:0; border-top:1px solid #dddddd;">
+
+                        <h3 style="color:#198754;">Deployment Overview</h3>
+
+                        <table width="100%" border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse; font-size:14px;">
+                          <tr>
+                            <td><b>Application Name</b></td>
+                            <td>${{ github.repository }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Branch Released</b></td>
+                            <td>${{ github.ref_name }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Environment</b></td>
+                            <td>Production</td>
+                          </tr>
+                          <tr>
+                            <td><b>Deployment Status</b></td>
+                            <td style="color:green;"><b>SUCCESSFUL</b></td>
+                          </tr>
+                          <tr>
+                            <td><b>Approved By</b></td>
+                            <td>${{ env.MANAGER_NAME }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Executed By</b></td>
+                            <td>${{ github.actor }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Commit ID</b></td>
+                            <td>${{ github.sha }}</td>
+                          </tr>
+                          <tr>
+                            <td><b>Commit Description</b></td>
+                            <td>${{ needs.build.outputs.commit_message }}</td>
+                          </tr>
+                        </table>
+
+                        <br>
+
+                        <h3 style="color:#198754;">Changes Released to Production</h3>
+
+                        <p>
+                          Below are the exact source files modified in this deployment:
+                        </p>
+
+                        <pre style="background:#f8f9fa; padding:14px; border:1px solid #dddddd; border-radius:6px; font-size:13px; overflow:auto;">${{ needs.build.outputs.changed_files }}</pre>
+
+                        <h3 style="color:#198754;">Release Validation Summary</h3>
+
+                        <ul>
+                          <li>Build package generated successfully.</li>
+                          <li>Artifact integrity verified before deployment.</li>
+                          <li>Cloud Run service updated with latest release package.</li>
+                          <li>Deployment completed without pipeline errors.</li>
+                          <li>Production instance is operational and accessible.</li>
+                        </ul>
+
+                        <h3 style="color:#198754;">Business Impact</h3>
+
+                        <p>
+                          All approved enhancements, fixes, and UI/code changes from this release are now active in Production.
+                          This deployment was completed through the standardized release governance process.
+                        </p>
+
+                        <h3 style="color:#198754;">Production URL</h3>
+
+                        <p>
+                          <a href="https://mywebsite-759899501179.us-central1.run.app/" style="color:#0d6efd;">
+                            https://mywebsite-759899501179.us-central1.run.app/
+                          </a>
+                        </p>
+
+                        <h3 style="color:#198754;">Recommended Next Steps</h3>
+
+                        <ol>
+                          <li>Perform quick functional validation on Production.</li>
+                          <li>Confirm business-critical pages are accessible.</li>
+                          <li>Share approval for closure if no issues are identified.</li>
+                        </ol>
+
+                        <hr style="border:0; border-top:1px solid #dddddd;">
+
+                        <p>
+                          Thank you for your approval and continued support of the controlled deployment process.
+                        </p>
+
+                        <p>
+                          Should any immediate rollback, hotfix, or production support be required,
+                          the DevOps team is available to assist.
+                        </p>
+
+                        <br>
+
+                        <p>
+                          Regards,<br>
+                          <b>DevOps Automation Team</b><br>
+                          Enterprise CI/CD Release Management
+                        </p>
+
+                      </td>
+                    </tr>
+
+                  </table>
+
+                </td>
+              </tr>
+            </table>
+
+          </body>
+          </html>
