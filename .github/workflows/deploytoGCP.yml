@@ -1,220 +1,50 @@
-name: Enterprise CI/CD Static Website to GCP
+name: Deploy Website to GCP
 
 on:
   push:
     branches:
       - main
-  # workflow_dispatch:
 
-# -------------------------------------------------
-# GLOBAL VARIABLES
-# -------------------------------------------------
 env:
-  GCP_PROJECT_ID: project-78555375-da98-4979-92f
-  GCP_BUCKET_NAME: githubactionsbucket
-  NODE_VERSION: '24'
-  PACKAGE_NAME: release.zip
-  MANAGER_EMAIL: indradeep.ch12@gmail.com
-  MANAGER_NAME: ${{ vars.MANAGER_NAME }}
+  PROJECT_ID: githubaction-deploy-staticcode
+  REGION: us-central1
+  SERVICE_NAME: mywebsite
 
 permissions:
   contents: read
-  actions: read
   id-token: write
 
-concurrency:
-  group: production-deploy
-  cancel-in-progress: false
-
 jobs:
-
-# =================================================
-# JOB 1 - BUILD + VALIDATION + CHANGE SUMMARY
-# =================================================
-  build:
-    name: Build Website Package
-    runs-on: ubuntu-latest
-
-    outputs:
-      commit_message: ${{ steps.commit.outputs.msg }}
-      changed_files: ${{ steps.changes.outputs.files }}
-
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 2
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: Read Commit Message
-        id: commit
-        run: |
-          echo "msg=$(git log -1 --pretty=%B | tr '\n' ' ')" >> $GITHUB_OUTPUT
-
-      - name: Detect Code Changes
-        id: changes
-        run: |
-          echo "files<<EOF" >> $GITHUB_OUTPUT
-          git diff --name-only HEAD~1 HEAD >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Validate Website Files
-        run: |
-          test -f index.html
-          test -f css/style.css
-          test -f js/script.js
-
-      - name: Archive Files
-        run: zip -r ${{ env.PACKAGE_NAME }} ./*
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: website-build
-          path: ${{ env.PACKAGE_NAME }}
-
-# =================================================
-# JOB 2 - EMAIL APPROVAL REQUEST
-# =================================================
-  approval-mail:
-    name: Send Approval Email
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Send Email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          secure: false
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: GCP Production Deployment Approval Required
-          to: ${{ env.MANAGER_EMAIL }}
-          from: ${{ secrets.MAIL_USERNAME }}
-
-          html_body: |
-            <h2>Dear ${{ env.MANAGER_NAME }},</h2>
-            <p>Build completed successfully for repository:
-            <b>${{ github.repository }}</b></p>
-
-            <p>Approval required before Production deployment to Google Cloud.</p>
-
-            <h3>Summary</h3>
-            <ul>
-              <li>Branch: ${{ github.ref_name }}</li>
-              <li>Commit ID: ${{ github.sha }}</li>
-              <li>Commit Message: ${{ needs.build.outputs.commit_message }}</li>
-            </ul>
-
-            <h3>Files Changed</h3>
-            <pre>${{ needs.build.outputs.changed_files }}</pre>
-
-            <p>Please approve deployment in GitHub Actions.</p>
-
-# =================================================
-# JOB 3 - MANUAL APPROVAL
-# =================================================
-  approval:
-    name: Production Approval
-    needs: approval-mail
-    runs-on: ubuntu-latest
-
-    environment:
-      name: production
-      url: https://storage.googleapis.com/${{ env.GCP_BUCKET_NAME }}/index.html
-
-    steps:
-      - name: Waiting Approval
-        run: echo "Waiting for manager approval..."
-
-# =================================================
-# JOB 4 - DEPLOY TO GCP CLOUD STORAGE
-# =================================================
   deploy:
-    name: Deploy to GCP Production
-    needs: approval
-    runs-on: ubuntu-latest
-
-    environment:
-      name: production
-
-    steps:
-      - name: Download Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: website-build
-          path: ./artifact
-
-      - name: Extract Artifact
-        run: |
-          cd artifact
-          unzip -o release.zip
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: projects/477651123877/locations/global/workloadIdentityPools/github-pool/providers/github-provider
-          service_account: github-actions@project-a906cb3e-a0ed-4ee0-bc6.iam.gserviceaccount.com
-
-      - name: Setup Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Set GCP Project
-        run: gcloud config set project ${{ env.GCP_PROJECT_ID }}
-
-      - name: Upload Website to GCP Bucket (No Public IAM Change)
-        run: |
-          gsutil -m rsync -r ./artifact gs://${{ env.GCP_BUCKET_NAME }}
-
-      - name: Make Bucket Public (Fix AccessDenied)
-        run: gsutil iam ch allUsers:objectViewer gs://${{ env.GCP_BUCKET_NAME }}
-
-      #- name: Make Files Public
-        #run: |
-          #gsutil iam ch allUsers:objectViewer gs://${{ env.GCP_BUCKET_NAME }}
-
-# =================================================
-# JOB 5 - SUCCESS EMAIL
-# =================================================
-  success-mail:
-    name: Send Success Email
-    needs: [deploy, build]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Send Success Mail
-        uses: dawidd6/action-send-mail@v3
+      - uses: actions/checkout@v5
+
+      - uses: google-github-actions/auth@v2
         with:
-          server_address: smtp.gmail.com
-          server_port: 587
-          secure: false
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
-          subject: GCP Production Deployment Successful
-          to: ${{ env.MANAGER_EMAIL }}
-          from: ${{ secrets.MAIL_USERNAME }}
+          workload_identity_provider: projects/759899501179/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions@githubaction-deploy-staticcode.iam.gserviceaccount.com
 
-          html_body: |
-            <h2>Dear ${{ env.MANAGER_NAME }},</h2>
+      - uses: google-github-actions/setup-gcloud@v2
 
-            <p>Production deployment completed successfully.</p>
+      - run: gcloud auth configure-docker
 
-            <ul>
-              <li>Repository: ${{ github.repository }}</li>
-              <li>Branch: ${{ github.ref_name }}</li>
-              <li>Commit ID: ${{ github.sha }}</li>
-              <li>Status: SUCCESS</li>
-            </ul>
+      - run: |
+          cat <<EOF > Dockerfile
+          FROM nginx:alpine
+          COPY . /usr/share/nginx/html
+          EXPOSE 80
+          CMD ["nginx", "-g", "daemon off;"]
+          EOF
 
-            <h3>Production URL</h3>
-            <p>
-            https://storage.googleapis.com/${{ env.GCP_BUCKET_NAME }}/index.html
-            </p>
+      - run: docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} .
 
-            <p>Regards,<br>DevOps Automation Team</p>
+      - run: docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}
+
+      - run: |
+          gcloud run deploy ${{ env.SERVICE_NAME }} \
+          --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }} \
+          --platform managed \
+          --region ${{ env.REGION }} \
+          --allow-unauthenticated
