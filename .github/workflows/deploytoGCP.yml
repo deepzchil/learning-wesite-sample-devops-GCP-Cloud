@@ -11,7 +11,7 @@ env:
   SERVICE_NAME: mywebsite
   NODE_VERSION: '24'
   PACKAGE_NAME: release.zip
-  MANAGER_EMAIL: yourmanager@email.com
+  MANAGER_EMAIL: indradeep.ch12@gmail.com
   MANAGER_NAME: Manager
 
 permissions:
